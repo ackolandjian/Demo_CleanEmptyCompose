@@ -1,60 +1,38 @@
-package com.tonprojet.famoconfc
+package com.exemple.nfc // Vérifie que ce nom correspond à ton projet
 
-import android.app.Activity
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.material.Text
+import androidx.compose.runtime.*
 
-// On implémente NfcAdapter.ReaderCallback pour lire en arrière-plan (idéal Famoco)
-class MainActivity : Activity(), NfcAdapter.ReaderCallback {
+class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
 
     private var nfcAdapter: NfcAdapter? = null
-    private lateinit var tvStatus: TextView
+    // Une "variable d'état" que Compose va surveiller pour mettre à jour l'écran
+    private var scanResult by mutableStateOf("Approchez une carte...")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        tvStatus = findViewById(R.id.tvStatus)
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
 
-        if (nfcAdapter == null) {
-            tvStatus.text = "Erreur : NFC non disponible sur cet appareil."
+        setContent {
+            // C'est ici qu'on définit l'interface sans XML
+            Text(text = scanResult)
         }
     }
 
-    // Quand l'application est à l'écran, on allume le lecteur NFC
     override fun onResume() {
         super.onResume()
-        val flags = NfcAdapter.FLAG_READER_NFC_A or 
-                    NfcAdapter.FLAG_READER_NFC_B or 
-                    NfcAdapter.FLAG_READER_NFC_F or 
-                    NfcAdapter.FLAG_READER_NFC_V
-        
-        nfcAdapter?.enableReaderMode(this, this, flags, null)
+        nfcAdapter?.enableReaderMode(this, this, 
+            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B, null)
     }
 
-    // Quand on quitte l'application, on coupe le lecteur pour économiser la batterie
-    override fun onPause() {
-        super.onPause()
-        nfcAdapter?.disableReaderMode(this)
-    }
-
-    // Cette fonction se déclenche automatiquement quand une carte touche le Famoco
     override fun onTagDiscovered(tag: Tag?) {
-        tag?.let {
-            // Extraction de l'UUID (tableau d'octets)
-            val uidBytes = it.id
-            // Conversion en format Hexadécimal lisible (ex: 04A2B3...)
-            val uidHex = uidBytes.joinToString("") { byte -> "%02X".format(byte) }
-
-            // Mise à jour de l'interface graphique (doit se faire sur le thread principal)
-            runOnUiThread {
-                tvStatus.text = "Carte détectée !\n\nUUID : $uidHex\n\nPrêt à envoyer au script Python..."
-            }
-            
-            // TODO: C'est ici que tu ajouteras la requête HTTP (POST) vers ton web app Python
-        }
+        val id = tag?.id?.joinToString("") { "%02X".format(it) } ?: "Erreur"
+        // On met à jour le texte à l'écran
+        scanResult = "UUID détecté : $id"
     }
 }
