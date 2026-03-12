@@ -1,56 +1,60 @@
-/*
- * Copyright 2026 Vincent Tsen
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-package vtsen.hashnode.dev.newemptycomposeapp.ui
+package com.tonprojet.famoconfc
 
+import android.app.Activity
+import android.nfc.NfcAdapter
+import android.nfc.Tag
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import vtsen.hashnode.dev.newemptycomposeapp.ui.screens.MainScreen
-import vtsen.hashnode.dev.newemptycomposeapp.ui.theme.NewEmptyComposeAppTheme
+import android.widget.TextView
 
-class MainActivity : ComponentActivity() {
+// On implémente NfcAdapter.ReaderCallback pour lire en arrière-plan (idéal Famoco)
+class MainActivity : Activity(), NfcAdapter.ReaderCallback {
+
+    private var nfcAdapter: NfcAdapter? = null
+    private lateinit var tvStatus: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        setupSplashScreen()
-
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        setContent {
-            NewEmptyComposeAppTheme {
-                MainScreen()
-            }
+        tvStatus = findViewById(R.id.tvStatus)
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        if (nfcAdapter == null) {
+            tvStatus.text = "Erreur : NFC non disponible sur cet appareil."
         }
     }
 
-    private fun setupSplashScreen() {
-        var keepSplashScreenOn = true
-        lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                delay(2000)
-                keepSplashScreenOn = false
-            }
-        }
+    // Quand l'application est à l'écran, on allume le lecteur NFC
+    override fun onResume() {
+        super.onResume()
+        val flags = NfcAdapter.FLAG_READER_NFC_A or 
+                    NfcAdapter.FLAG_READER_NFC_B or 
+                    NfcAdapter.FLAG_READER_NFC_F or 
+                    NfcAdapter.FLAG_READER_NFC_V
+        
+        nfcAdapter?.enableReaderMode(this, this, flags, null)
+    }
 
-        installSplashScreen().setKeepOnScreenCondition {
-            keepSplashScreenOn
+    // Quand on quitte l'application, on coupe le lecteur pour économiser la batterie
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableReaderMode(this)
+    }
+
+    // Cette fonction se déclenche automatiquement quand une carte touche le Famoco
+    override fun onTagDiscovered(tag: Tag?) {
+        tag?.let {
+            // Extraction de l'UUID (tableau d'octets)
+            val uidBytes = it.id
+            // Conversion en format Hexadécimal lisible (ex: 04A2B3...)
+            val uidHex = uidBytes.joinToString("") { byte -> "%02X".format(byte) }
+
+            // Mise à jour de l'interface graphique (doit se faire sur le thread principal)
+            runOnUiThread {
+                tvStatus.text = "Carte détectée !\n\nUUID : $uidHex\n\nPrêt à envoyer au script Python..."
+            }
+            
+            // TODO: C'est ici que tu ajouteras la requête HTTP (POST) vers ton web app Python
         }
     }
 }
